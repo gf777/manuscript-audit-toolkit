@@ -1,35 +1,17 @@
 """
-Example Script: How to use the Manuscript Audit Toolkit on any paper.
+Example Script: Surgical Track Changes + Phrase-Anchored [AI AUDIT] Comments
+using OpenXMLAuditSession and SpreadsheetAuditor.
 """
 
-from manuscript_audit import ManuscriptAuditor, OpenXMLCommentInjector
+from manuscript_audit import OpenXMLAuditSession, SpreadsheetAuditor
+
 
 def run_example():
-    # 1. Audit a manuscript text file
-    # auditor = ManuscriptAuditor(model="gemini-2.5-pro")
-    # results = auditor.run_full_audit("sample_manuscript.txt", output_json="sample_audit.json")
+    print("Manuscript Audit Toolkit v2.0 ready.")
+    print("  - OpenXMLAuditSession: Native <w:del>/<w:ins> Track Changes + [AI AUDIT | ...] comments")
+    print("  - SpreadsheetAuditor:  Excel auto-date / scientific-notation / URL-encoding forensics")
+    print("  - google_apps_script/update_google_docs_preserve_tabs.gs: Zero-tab-merge Google Docs sync")
 
-    # Sample mock audit results for demonstration
-    sample_audit = [
-        {
-            "line_id": 1,
-            "section": "RESULTS",
-            "original_line": "Surpassing the Q60 benchmark with <1 error per 2 Mb.",
-            "has_issue": True,
-            "error_type": "MATH_ERROR",
-            "error_explanation": "Q60 corresponds to 1 error per 1 Mb (10^-6), not 1 error per 2 Mb.",
-            "corrected_line": "Surpassing the Q60 benchmark with <1 error per 1 Mb."
-        }
-    ]
-
-    # 2. Inject into target docx
-    # injector = OpenXMLCommentInjector("my_manuscript_draft.docx")
-    # injector.inject_audit_comments(
-    #     audit_results=sample_audit,
-    #     output_docx_path="my_manuscript_audited.docx",
-    #     pre_revision_docx_path="my_manuscript_pre_revision.docx"
-    # )
-    print("Example completed successfully.")
 
 if __name__ == "__main__":
     run_example()

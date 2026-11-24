@@ -1,54 +1,53 @@
-# Manuscript Audit Toolkit 🔬📑
+# Manuscript Audit Toolkit v2.0 🔬📑
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![OpenXML](https://img.shields.io/badge/Format-OpenXML%20%2F%20DOCX-green.svg)](https://en.wikipedia.org/wiki/Office_Open_XML)
+[![OpenXML](https://img.shields.io/badge/Format-OpenXML%20%2F%20DOCX%20%2F%20XLSX-green.svg)](https://en.wikipedia.org/wiki/Office_Open_XML)
 
-An automated, non-destructive scientific auditing and peer-review pipeline for academic manuscripts. It performs rigorous line-by-line checks for AI artifacts, mathematical inconsistencies, and nomenclature errors, performs sentence-level pre/post revision alignment, and injects native, highlighted sidebar comments directly into `.docx` (Google Docs & Microsoft Word) while **100% preserving live reference manager linkages** (Paperpile, EndNote, Zotero).
-
----
-
-## 🎯 The Core Problem Solved
-
-When auditing or heavily revising academic manuscripts (e.g., using AI rewrites, co-author merges, or journal revision responses), researchers face three major engineering hurdles:
-
-1. **Reference Manager Corruption**: Standard programmatic document tools (`pandoc`, naive `python-docx` scripts, regex converters) wipe out `<w:hyperlink>` elements and Word Field Codes (`ADDIN EN.CITE`). This breaks live citation databases (e.g., Paperpile's `https://paperpile.com/c/...` cloud IDs, EndNote XML records, Zotero bookmarks), turning interactive bibliographies into unformattable plain text.
-2. **Google Docs API Limitations**: Google Workspace APIs (`Drive.Comments.create`, Google Apps Script) **do not support anchoring comments to text ranges** in Google Docs. Third-party scripts can only insert document-level (unanchored) comments.
-3. **Loss of Historical Context**: When co-authors or PIs review a revised manuscript, they need to see what the sentence looked like *before* the revision, what the *revised draft* says, what the *specific correction* is, and *why*.
+An end-to-end, non-destructive scientific manuscript auditing, AI-prose de-slopping, spreadsheet/figure forensics, and OpenXML Track Changes + sidebar comment toolkit for **Google Docs** and **Microsoft Word**—preserving **100% of live reference manager links** (Zotero, Paperpile, EndNote), **100% of prior coauthor comments**, and **100% of multi-tab Google Docs hierarchies**.
 
 ---
 
-## 🏗️ Architecture & Workflow
+## ✨ What's New in v2.0
+
+1. **Native OpenXML Track Changes (`<w:del>` / `<w:ins>`) + Phrase-Anchored Comments (`DocxAuditEngine`)**:
+   - Splits `<w:r>` runs at exact character offsets while cloning `<w:rPr>` formatting (superscripts, italics, bold) and treating `<w:hyperlink>`, `<w:ins>`, `<w:del>`, and `<m:oMath>` as barriers—emitting **1-click green Suggesting-mode edits** in Google Docs alongside phrase-anchored comments.
+2. **100% Preservation of Existing Coauthor Comments & Inline Prompts**:
+   - Inventories existing `word/comments.xml` (`inspect_docx_comments_and_changes`), preserves all prior coauthor anchors intact, starts new comment IDs strictly at `max(existing_ids) + 1`, and bold-prefixes new headers with **`[AI AUDIT | <CATEGORY>]`** in third-person voice so AI audit comments are unmistakably distinct from human coauthor comments even after Google Docs `.docx` conversion.
+3. **Zero-Tab-Merge In-Place Multi-Tab Google Docs Updater (`google_apps_script/update_google_docs_preserve_tabs.gs`)**:
+   - Updates a live multi-tab Google Doc **in place** (preserving its exact URL, File ID, sharing permissions, and Version History) **without flattening its tabs**: snapshots the live tab hierarchy via Google Docs REST API v1 (`?includeTabsContent=true`), updates the Main Manuscript tab from the audited `.docx`, restores its tab title/emoji (`UpdateDocumentTabPropertiesRequest`), and recreates + deep-clones all remaining tabs and nested child sub-tabs (`AddDocumentTabRequest` + `DocumentApp`) from an automatic `[PRE-AUDIT MULTI-TAB BACKUP]`.
+4. **Programmatic Spreadsheet Forensics (`SpreadsheetAuditor`)**:
+   - Scans `.xlsx` Supplementary Tables for Excel auto-date corruption of gene symbols (`MARCH1`, `SEPT1`, `DEC1`) and floats, scientific-notation coordinate truncation (`start == end >= 1e8` bp), URL-encoded strings (`%2C`), and `"IN PROGRESS"` / `#REF!` placeholders.
+5. **Dark-Mode Figure RGBA Transparency Repair (`audit_and_repair_docx_figures`)**:
+   - Detects embedded RGBA PNG figures in `word/media/` with transparent backgrounds (`alpha < 255`) where black axes/text vanish in dark mode and composites them onto solid white RGB `(255, 255, 255)`.
+6. **Live Google Snapshot Downloader & Multi-Tab Detector (`google_docs.py`)**:
+   - Downloads live `.docx` and `.xlsx` exports directly from link-shared Google Docs/Sheets URLs (`?tab=...` aware) and detects multi-tab documents automatically.
+
+---
+
+## 🏗️ Architecture & End-to-End Workflow
 
 ```mermaid
 flowchart TD
-    subgraph Inputs
-        A1[Pre-Revision Manuscript .docx] 
-        A2[Revised Draft .docx with Live Citations]
-        A3[Manuscript Text .txt]
+    subgraph "1. Live Snapshot & Forensics"
+        G1["Live Multi-Tab Google Doc & Sheet URLs"] --> G2["download_google_snapshot & detect_google_doc_tabs"]
+        G2 --> G3["inspect_docx_comments_and_changes (Preserve 0..N Coauthor Comments)"]
+        G2 --> G4["SpreadsheetAuditor (.xlsx Date/Coord/URL Repair)"]
+        G2 --> G5["audit_and_repair_docx_figures (RGBA -> White RGB)"]
     end
 
-    subgraph "1. Structured LLM Auditor"
-        A3 --> B1[Batch Chunking & Section Parsing]
-        B1 --> B2[Gemini 2.5 Pro / GPT-4o / Claude 3.5]
-        B2 --> B3[JSON Schema Validation: Issues, Types, Corrections, Explanations]
+    subgraph "2. Scientific Audit & AI De-Slopping"
+        G3 --> A1["Cross-Document Consistency, Methods, & LLM Prose Audit"]
+        A1 --> A2["OpenXMLAuditSession + DocxAuditEngine"]
+        A2 --> A3["Exact-Offset <w:del>/<w:ins> + [AI AUDIT | ...] Anchored Comments"]
+        A3 --> A4["Validated *_AUDITED.docx (100% Hyperlinks & Coauthor Comments Intact)"]
     end
 
-    subgraph "2. Dual-Level Sentence Aligner"
-        A1 & A2 --> C1[Paragraph Block Mapping]
-        C1 --> C2[Intra-Paragraph Fuzzy & Token Matching]
-        C2 --> C3[Pre-Revision vs Post-Revision Sentence Pairs]
+    subgraph "3. In-Place Multi-Tab Google Docs Sync"
+        A4 --> U1["Upload *_AUDITED.docx to Google Drive"]
+        U1 --> U2["updateGoogleDocPreservingAllTabs() (Drive API + Docs API v1)"]
+        U2 --> U3["Same Live Google Doc URL: Green Suggesting Cards + All Tabs Unmerged!"]
     end
-
-    subgraph "3. Non-Destructive OpenXML Comment Injector"
-        B3 & C3 & A2 --> D1[Unpack OpenXML Package]
-        D1 --> D2[Scan Character Spans & Insert w:commentRangeStart/End]
-        D2 --> D3[Build word/comments.xml with Multi-Paragraph Rich Cards]
-        D3 --> D4[Preserve 100% Hyperlinks & Relationships]
-        D4 --> D5[Repack Validated .docx]
-    end
-
-    D5 --> E[Upload to Google Docs / Word: Native Highlighted Comments + Working Paperpile Citations!]
 ```
 
 ---
@@ -61,94 +60,84 @@ cd manuscript-audit-toolkit
 pip install -e .
 ```
 
-Set your API key (if using the automated LLM auditor):
-```bash
-export GEMINI_API_KEY="your-api-key-here"
-```
-
 ---
 
-## 🚀 Quickstart Guide
+## 🚀 CLI Quickstart
 
-### 1. Run Full End-to-End Pipeline
-Run an audit on `draft.txt`, align against `original_v1.docx`, and generate `audited_review.docx`:
 ```bash
+# 1. Download a live Google Doc snapshot & check if it has multiple tabs
+manuscript-audit download \
+  --url "https://docs.google.com/document/d/<FILE_ID>/edit?tab=<TAB_ID>" \
+  --output manuscript_tab.docx \
+  --single-tab \
+  --check-tabs
+
+# 2. Inventory existing coauthor comments, Track Changes, & hyperlinks
+manuscript-audit inspect --doc manuscript_tab.docx --output prior_comments.json
+
+# 3. Audit & repair Supplementary Tables (.xlsx)
+manuscript-audit audit-xlsx \
+  --input supplementary_tables.xlsx \
+  --output supplementary_tables_AUDITED_FIXED.xlsx \
+  --report xlsx_forensics.json
+
+# 4. Repair transparent RGBA figures in a .docx for dark-mode legibility
+manuscript-audit fix-figures --doc manuscript_tab.docx --output manuscript_rgb.docx
+
+# 5. Run LLM line-by-line audit & inject native Track Changes + [AI AUDIT] comments
+export GEMINI_API_KEY="your-api-key"
 manuscript-audit pipeline \
-  --input-txt manuscript.txt \
-  --doc manuscript_draft.docx \
-  --pre-revision manuscript_v1.docx \
-  --output-docx audited_manuscript.docx
+  --input-txt manuscript_tab.docx \
+  --doc manuscript_tab.docx \
+  --output-docx manuscript_AUDITED.docx
 ```
-
-### 2. Step-by-Step Modular Workflow
-
-#### Step A: Run the Line-by-Line Audit
-```bash
-manuscript-audit audit \
-  --input manuscript.txt \
-  --output audit_results.json \
-  --model gemini-2.5-pro
-```
-
-#### Step B: Inject Sentence-Level Comments into DOCX
-```bash
-manuscript-audit inject \
-  --doc manuscript_draft.docx \
-  --audit-results audit_results.json \
-  --pre-revision manuscript_v1.docx \
-  --output audited_manuscript.docx
-```
-
-#### Step C: Open in Google Docs or Word
-1. Upload `audited_manuscript.docx` to Google Drive.
-2. Right-click $\rightarrow$ **Open with $\rightarrow$ Google Docs**.
-3. Every audited line will highlight in yellow and display a sidebar comment containing:
-   * **`[Audit Line X (Section)]`**
-   * **`PRE-REVISION ORIGINAL:`** `"..."` (sentence from pre-revision draft)
-   * **`CURRENT DRAFT TEXT:`** `"..."` (sentence in current draft)
-   * **`SUGGESTED CORRECTION:`** `"..."` (recommended scientific edit)
-   * **`EXPLANATION:`** Detailed rationale.
-4. Click **Paperpile $\rightarrow$ Format citations** or use your Word EndNote/Zotero toolbar—all live links work seamlessly.
 
 ---
 
-## 🐍 Python API Usage
+## 🐍 Programmatic Python API (`OpenXMLAuditSession`)
+
+For surgical, publication-grade manuscript edits with exact phrase matching, inline figure relocation, and 100% preservation of existing coauthor comments and Zotero/Paperpile hyperlinks:
 
 ```python
-from manuscript_audit import ManuscriptAuditor, OpenXMLCommentInjector
+from manuscript_audit import OpenXMLAuditSession, W_NS
 
-# 1. Audit manuscript lines
-auditor = ManuscriptAuditor(model="gemini-2.5-pro")
-audit_results = auditor.run_full_audit("manuscript.txt", output_json="audit_results.json")
+with OpenXMLAuditSession(
+    input_docx="manuscript_tab.docx",
+    output_docx="manuscript_AUDITED.docx",
+    author="Manuscript Audit (Antigravity)",
+    initials="AGY",
+    comment_prefix="AI AUDIT",  # Visually distinguishes AI comments from coauthor comments in Google Docs
+) as session:
+    P = list(session.engine.body)
 
-# 2. Inject native comments with pre-revision comparisons
-injector = OpenXMLCommentInjector("draft_with_citations.docx")
-injector.inject_audit_comments(
-    audit_results=audit_results,
-    output_docx_path="audited_final.docx",
-    pre_revision_docx_path="original_pre_revision.docx"
-)
+    # Inject native <w:del>/<w:ins> Track Change + phrase-anchored [AI AUDIT | ...] comment
+    session.engine.apply_phrase_edit(
+        P[12],
+        target="serves as a testament to the intricate interplay of evolutionary forces",
+        replacement="reflects recurrent subtelomeric recombination and GC-biased gene conversion",
+        category="AI-PROSE DE-SLOPPING & MECHANISM",
+        summary="Replaced generic LLM cliché with concrete evolutionary mechanisms.",
+        details="Addresses coauthor request for explicit mechanistic interpretation.",
+    )
+
+    stats = session.save()
+    print(stats)
 ```
 
 ---
 
-## 🔍 Technical Deep-Dive: Why Non-Destructive OpenXML Matters
+## ☁️ In-Place Multi-Tab Google Docs Upload (Zero Tab Merging)
 
-### How Paperpile Citations are Structured
-In Word/Google Docs, Paperpile references are not plain text strings like `[Smith 2020]` or `{Smith, 2020}`. They are structured OpenXML elements:
-```xml
-<w:hyperlink r:id="rId10">
-  <w:r>
-    <w:rPr><w:vertAlign w:val="superscript"/></w:rPr>
-    <w:t>2–7</w:t>
-  </w:r>
-</w:hyperlink>
-```
-where `rId10` in `word/_rels/document.xml.rels` points to:
-```
-https://paperpile.com/c/A7X7tw/An6Wb+6KMAm+EAXs0+kzRFS+xwqyi+iriXh
-```
-Standard libraries strip or flatten these hyperlinks. The `manuscript-audit` toolkit manipulates the OpenXML AST non-destructively, injecting `w:commentRangeStart` and `w:commentRangeEnd` around text runs without altering existing hyperlinks, styles, or relationship targets.
+Open [`google_apps_script/update_google_docs_preserve_tabs.gs`](google_apps_script/update_google_docs_preserve_tabs.gs):
+
+1. Upload your generated `manuscript_AUDITED.docx` to Google Drive (keep it as a `.docx` file).
+2. Open the target live Google Doc → **Extensions → Apps Script** → paste `update_google_docs_preserve_tabs.gs` (and set `STAGED_AUDITED_DOCX_NAME` to your `.docx` filename).
+3. In the left sidebar under **Services (+)**, add **both** **`Drive API`** and **`Google Docs API`**.
+4. Click **Run** (`updateGoogleDocPreservingAllTabs` is selected by default).
+
+Your live Google Doc keeps its **exact URL, permissions, Version History, all prior coauthor comments, all new green Suggesting-mode edits & `[AI AUDIT | ...]` comments, AND all sidebar tabs unmerged** (with an automatic `[PRE-AUDIT MULTI-TAB BACKUP]` saved in Drive).
+
+For autonomous coding/research agents, see [`AGENT_HANDOVER_PROMPT.md`](AGENT_HANDOVER_PROMPT.md) for the complete 6-step protocol.
 
 ---
 
